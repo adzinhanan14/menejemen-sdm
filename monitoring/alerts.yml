@@ -1,0 +1,55 @@
+groups:
+  - name: hrms_alerts
+    rules:
+      # ── High Error Rate ──────────────────────────────────────────────
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{job="hrms-backend", status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{job="hrms-backend"}[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "High HTTP error rate on HRMS backend"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes (threshold: 5%). Instance: {{ $labels.instance }}"
+          slack_channel: "#alerts-hrms"
+
+      # ── Slow API Response ────────────────────────────────────────────
+      - alert: SlowAPIResponse
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="hrms-backend"}[5m])) by (le, route)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow API response detected"
+          description: "P95 latency for {{ $labels.route }} is {{ $value }}s (threshold: 2s)"
+
+      # ── Backend Down ─────────────────────────────────────────────────
+      - alert: BackendDown
+        expr: up{job="hrms-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HRMS Backend is down"
+          description: "Backend instance {{ $labels.instance }} has been unreachable for more than 1 minute."
+
+      # ── High DB Query Duration ───────────────────────────────────────
+      - alert: SlowDatabaseQuery
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(db_query_duration_seconds_bucket{job="hrms-backend"}[5m])) by (le, operation)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow database queries detected"
+          description: "P95 DB query time for {{ $labels.operation }} is {{ $value }}s"

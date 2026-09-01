@@ -1,0 +1,540 @@
+// HRMS Enterprise - Prisma Schema
+// Foundational models: companies, departments, positions, employees,
+// employee_contracts, users, roles, permissions (RBAC).
+// Further modules (attendance, payroll, recruitment, performance) are
+// added incrementally on top of this foundation.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------
+// CORE HR: companies, departments, positions, employees
+// ------------------------------------------------------------------
+
+model Company {
+  id      String @id @default(uuid())
+  name    String @db.VarChar(255)
+  taxId   String? @map("tax_id") @db.VarChar(50)
+  address String?
+  timezone String? @db.VarChar(50)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  departments Department[]
+  employees   Employee[]
+
+  @@map("companies")
+}
+
+model Department {
+  id        String  @id @default(uuid())
+  companyId String  @map("company_id")
+  parentId  String? @map("parent_id")
+  name      String  @db.VarChar(100)
+  code      String? @db.VarChar(20)
+  managerId String? @map("manager_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company  Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent   Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Department[] @relation("DepartmentHierarchy")
+
+  // The employee who manages this department.
+  // Kept as a loose reference (no relation attr on Employee side) to avoid a
+  // circular required-relation between Department <-> Employee.
+  manager Employee? @relation("DepartmentManager", fields: [managerId], references: [id], onDelete: SetNull)
+
+  positions              Position[]
+  employeesCurrent       Employee[]         @relation("EmployeeCurrentDepartment")
+  employeeContracts      EmployeeContract[]
+  recruitVacancies       RecruitVacancy[]
+
+  @@index([companyId])
+  @@index([parentId])
+  @@map("departments")
+}
+
+model Position {
+  id                  String   @id @default(uuid())
+  departmentId        String   @map("department_id")
+  name                String   @db.VarChar(100)
+  jobLevel            String?  @map("job_level") @db.VarChar(50)
+  baseSalaryRangeMin  Decimal? @map("base_salary_range_min") @db.Decimal(15, 2)
+  baseSalaryRangeMax  Decimal? @map("base_salary_range_max") @db.Decimal(15, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  employeesCurrent  Employee[]         @relation("EmployeeCurrentPosition")
+  employeeContracts EmployeeContract[]
+  recruitVacancies  RecruitVacancy[]
+
+  @@index([departmentId])
+  @@map("positions")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  RESIGNED
+  TERMINATED
+  ON_LEAVE
+}
+
+model Employee {
+  id     String @id @default(uuid())
+  companyId String @map("company_id")
+
+  nik   String @unique @db.VarChar(20)
+  fullName String @map("full_name") @db.VarChar(255)
+  email String @unique @db.VarChar(100)
+  phone String? @db.VarChar(20)
+
+  gender             Gender?
+  birthPlace         String?   @map("birth_place") @db.VarChar(100)
+  birthDate          DateTime? @map("birth_date") @db.Date
+  identityNumber     String?   @map("identity_number") @db.VarChar(30)
+  identityExpiryDate DateTime? @map("identity_expiry_date") @db.Date
+  currentAddress     String?   @map("current_address")
+
+  bankName          String? @map("bank_name") @db.VarChar(50)
+  bankAccountNumber String? @map("bank_account_number") @db.VarChar(30)
+
+  currentDepartmentId String? @map("current_department_id")
+  currentPositionId   String? @map("current_position_id")
+
+  joiningDate       DateTime  @map("joining_date") @db.Date
+  probationEndDate  DateTime? @map("probation_end_date") @db.Date
+  resignationDate   DateTime? @map("resignation_date") @db.Date
+
+  employmentStatus EmploymentStatus @default(ACTIVE) @map("employment_status")
+
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  company           Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  currentDepartment Department? @relation("EmployeeCurrentDepartment", fields: [currentDepartmentId], references: [id], onDelete: SetNull)
+  currentPosition   Position?   @relation("EmployeeCurrentPosition", fields: [currentPositionId], references: [id], onDelete: SetNull)
+
+  managedDepartments Department[]       @relation("DepartmentManager")
+  contracts          EmployeeContract[]
+  user               User?
+  attendanceLogs     AttendanceLog[]
+  leaveApplications  LeaveApplication[]
+  salarySettings     EmployeeSalarySettings[]
+  payrollDetails     PayrollDetail[]
+
+  @@index([email])
+  @@index([nik])
+  @@index([employmentStatus])
+  @@index([companyId])
+  @@map("employees")
+}
+
+enum ContractType {
+  PERMANENT
+  PROBATION
+  CONTRACT
+}
+
+// Slowly-changing history of an employee's position/department/salary.
+model EmployeeContract {
+  id           String   @id @default(uuid())
+  employeeId   String   @map("employee_id")
+  positionId   String   @map("position_id")
+  departmentId String   @map("department_id")
+
+  contractType ContractType @map("contract_type")
+  startDate    DateTime     @map("start_date") @db.Date
+  endDate      DateTime?    @map("end_date") @db.Date
+  baseSalary   Decimal      @map("base_salary") @db.Decimal(15, 2)
+  note         String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  position   Position   @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId])
+  @@map("employee_contracts")
+}
+
+// ------------------------------------------------------------------
+// SYSTEM & SECURITY: users, roles, permissions (RBAC)
+// ------------------------------------------------------------------
+
+model User {
+  id           String  @id @default(uuid())
+  employeeId   String  @unique @map("employee_id")
+  email        String  @unique @db.VarChar(100)
+  passwordHash String  @map("password_hash")
+  isActive     Boolean @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  roles    UserRole[]
+
+  @@map("users")
+}
+
+model Role {
+  id   String @id @default(uuid())
+  name String @unique @db.VarChar(50)
+  description String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id @default(uuid())
+  name        String  @unique @db.VarChar(100)
+  description String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+// Explicit join model (rather than an implicit m-n) so we can add
+// audit columns (assignedAt, assignedBy) later without a migration
+// that changes the relation shape.
+model UserRole {
+  userId String @map("user_id")
+  roleId String @map("role_id")
+
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ------------------------------------------------------------------
+// ATTENDANCE, LEAVE & SYSTEM AUDIT
+// ------------------------------------------------------------------
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  ON_LEAVE
+}
+
+model AttendanceLog {
+  id                  String           @id @default(uuid())
+  employeeId          String           @map("employee_id")
+  date                DateTime         @db.Date
+  checkInTime         DateTime?        @map("check_in_time")
+  checkOutTime        DateTime?        @map("check_out_time")
+  checkInLatitude     Float?           @map("check_in_latitude")
+  checkInLongitude    Float?           @map("check_in_longitude")
+  facePhotoUrl        String?          @map("face_photo_url")
+  status              AttendanceStatus @default(PRESENT)
+  totalWorkingMinutes Int?             @map("total_working_minutes")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([date])
+  @@index([employeeId, date])  // Composite for check-in lookup
+  @@index([status])
+  @@map("attendance_logs")
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model LeaveType {
+  id           String @id @default(uuid())
+  name         String @unique @db.VarChar(100)
+  quotaPerYear Int    @default(12) @map("quota_per_year")
+  description  String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  leaveApplications LeaveApplication[]
+
+  @@map("leave_types")
+}
+
+model LeaveApplication {
+  id          String      @id @default(uuid())
+  employeeId  String      @map("employee_id")
+  leaveTypeId String      @map("leave_type_id")
+  startDate   DateTime    @db.Date @map("start_date")
+  endDate     DateTime    @db.Date @map("end_date")
+  totalDays   Int         @map("total_days")
+  reason      String
+  attachment  String?
+  status      LeaveStatus @default(PENDING)
+  approvedBy  String?     @map("approved_by")
+  notes       String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  employee  Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([employeeId, status])  // Composite for quota queries
+  @@index([leaveTypeId])
+  @@map("leave_applications")
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  userId      String?  @map("user_id")
+  action      String   @db.VarChar(100)
+  description String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("activity_logs")
+}
+
+// ------------------------------------------------------------------
+// PAYROLL MODULE
+// ------------------------------------------------------------------
+
+enum ComponentType {
+  ADDITION
+  DEDUCTION
+}
+
+model SalaryComponent {
+  id                 String        @id @default(uuid())
+  name               String        @db.VarChar(100)
+  type               ComponentType
+  isTaxable          Boolean       @default(false) @map("is_taxable")
+  calculationFormula Json?         @map("calculation_formula")
+  description        String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  employeeSalarySettings EmployeeSalarySettings[]
+
+  @@map("salary_components")
+}
+
+model EmployeeSalarySettings {
+  id          String   @id @default(uuid())
+  employeeId  String   @map("employee_id")
+  componentId String   @map("component_id")
+  amount      Decimal  @db.Decimal(15, 2)
+  effectiveDate DateTime @default(now()) @map("effective_date") @db.Date
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  employee  Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  component SalaryComponent  @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([componentId])
+  @@map("employee_salary_settings")
+}
+
+enum PayrollStatus {
+  DRAFT
+  PROCESSING
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+model PayrollBatch {
+  id           String        @id @default(uuid())
+  periodMonth  Int           @map("period_month")
+  periodYear   Int           @map("period_year")
+  totalGross   Decimal       @default(0) @map("total_gross") @db.Decimal(15, 2)
+  totalNet     Decimal       @default(0) @map("total_net") @db.Decimal(15, 2)
+  status       PayrollStatus @default(DRAFT)
+  processedBy  String?       @map("processed_by")
+  approvedBy   String?       @map("approved_by")
+  approvedAt   DateTime?     @map("approved_at")
+  paidAt       DateTime?     @map("paid_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  details PayrollDetail[]
+
+  @@map("payroll_batches")
+}
+
+model PayrollDetail {
+  id            String  @id @default(uuid())
+  batchId       String  @map("batch_id")
+  employeeId    String  @map("employee_id")
+  baseSalary    Decimal @db.Decimal(15, 2) @map("base_salary")
+  totalAddition Decimal @default(0) @db.Decimal(15, 2) @map("total_addition")
+  totalDeduction Decimal @default(0) @db.Decimal(15, 2) @map("total_deduction")
+  grossSalary   Decimal @db.Decimal(15, 2) @map("gross_salary")
+  netSalary     Decimal @db.Decimal(15, 2) @map("net_salary")
+  workDays      Int     @default(0) @map("work_days")
+  attendanceDays Int    @default(0) @map("attendance_days")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  batch      PayrollBatch              @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  employee   Employee                  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  breakdowns PayrollDetailBreakdown[]
+
+  @@index([batchId])
+  @@index([employeeId])
+  @@index([batchId, employeeId])  // Composite for payroll batch lookups
+  @@map("payroll_details")
+}
+
+model PayrollDetailBreakdown {
+  id        String  @id @default(uuid())
+  detailId  String  @map("detail_id")
+  componentName String @db.VarChar(100) @map("component_name")
+  componentType ComponentType @map("component_type")
+  amount    Decimal @db.Decimal(15, 2)
+
+  detail PayrollDetail @relation(fields: [detailId], references: [id], onDelete: Cascade)
+
+  @@index([detailId])
+  @@map("payroll_detail_breakdowns")
+}
+
+// ------------------------------------------------------------------
+// RECRUITMENT MODULE
+// ------------------------------------------------------------------
+
+enum VacancyStatus {
+  OPEN
+  CLOSED
+  ON_HOLD
+}
+
+enum ApplicantStatus {
+  NEW
+  SCREENING
+  INTERVIEW
+  OFFERED
+  ACCEPTED
+  REJECTED
+}
+
+enum InterviewResult {
+  PENDING
+  PASSED
+  FAILED
+}
+
+model RecruitVacancy {
+  id           String        @id @default(uuid())
+  title        String        @db.VarChar(200)
+  departmentId String?       @map("department_id")
+  positionId   String?       @map("position_id")
+  description  String?
+  requirements Json?
+  status       VacancyStatus @default(OPEN)
+  openDate     DateTime      @default(now()) @map("open_date") @db.Date
+  closeDate    DateTime?     @map("close_date") @db.Date
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  department  Department?         @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  position    Position?           @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  applicants  RecruitApplicant[]
+
+  @@index([status])
+  @@map("recruit_vacancies")
+}
+
+model RecruitApplicant {
+  id          String          @id @default(uuid())
+  vacancyId   String          @map("vacancy_id")
+  fullName    String          @map("full_name") @db.VarChar(200)
+  email       String          @db.VarChar(100)
+  phone       String?         @db.VarChar(20)
+  cvUrl       String?         @map("cv_url")
+  status      ApplicantStatus @default(NEW)
+  appliedAt   DateTime        @default(now()) @map("applied_at")
+  parsedCvData Json?          @map("parsed_cv_data")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  vacancy    RecruitVacancy      @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  interviews RecruitInterview[]
+
+  @@index([vacancyId])
+  @@index([status])
+  @@map("recruit_applicants")
+}
+
+model RecruitInterview {
+  id            String          @id @default(uuid())
+  applicantId   String          @map("applicant_id")
+  interviewerId String?         @map("interviewer_id")
+  scheduledAt   DateTime        @map("scheduled_at")
+  score         Int?
+  feedback      String?
+  result        InterviewResult @default(PENDING)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  applicant RecruitApplicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+
+  @@index([applicantId])
+  @@map("recruit_interviews")
+}

@@ -34,6 +34,10 @@ const years = computed(() => {
   return Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 });
 
+const totalDisbursedNet = computed(() => {
+  return batches.value.reduce((acc, b) => acc + (parseFloat(b.totalNet) || 0), 0);
+});
+
 const fetchBatches = async () => {
   loading.value = true;
   try {
@@ -82,17 +86,17 @@ const generatePayroll = async () => {
 const getStatusBadgeClass = (status: string) => {
   switch (status) {
     case 'DRAFT':
-      return 'bg-amber-100 text-amber-800';
+      return 'bg-amber-50 text-amber-700 border-amber-200';
     case 'PROCESSING':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-sky-50 text-sky-700 border-sky-200';
     case 'APPROVED':
-      return 'bg-emerald-100 text-emerald-800';
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     case 'PAID':
-      return 'bg-slate-100 text-slate-600';
+      return 'bg-primary-50 text-primary-800 border-primary-200';
     case 'CANCELLED':
-      return 'bg-rose-100 text-rose-800';
+      return 'bg-rose-50 text-rose-700 border-rose-200';
     default:
-      return 'bg-slate-100 text-slate-600';
+      return 'bg-slate-100 text-slate-600 border-slate-200';
   }
 };
 
@@ -139,83 +143,122 @@ const markAsPaid = async (batchId: string) => {
     <!-- Header Title & Action -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-slate-800">Manajemen Penggajian</h1>
-        <p class="text-sm text-slate-500 mt-1">Generate payroll bulanan, review batch, dan distribute slip gaji karyawan.</p>
+        <h1 class="text-2xl font-extrabold text-slate-900 font-heading tracking-tight">
+          Manajemen Penggajian & Payroll
+        </h1>
+        <p class="text-sm text-slate-500 mt-1">
+          Kalkulasi penggajian bulanan, kompensasi karyawan, distribusi slip gaji, dan persetujuan batch.
+        </p>
       </div>
       <button
         @click="openGenerateModal"
-        class="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700 active:scale-95"
+        class="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-900 to-primary-800 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-950/20 hover:from-primary-800 hover:to-primary-700 transition-all duration-200 active:scale-95 group"
       >
-        <span class="text-base font-bold">⚙️</span> Generate Payroll
+        <svg class="w-4 h-4 text-accent-400 group-hover:rotate-45 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        <span>Generate Payroll Batch</span>
       </button>
     </div>
 
+    <!-- Quick Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="rounded-2xl bg-white p-5 shadow-xs border border-slate-200/80 space-y-2">
+        <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Payroll Batches</div>
+        <div class="text-3xl font-extrabold font-mono text-slate-900">{{ batches.length }}</div>
+        <div class="text-xs text-slate-400">Batch periode gaji yang pernah diproses.</div>
+      </div>
+
+      <div class="rounded-2xl bg-white p-5 shadow-xs border border-slate-200/80 space-y-2">
+        <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Disbursed (Net)</div>
+        <div class="text-2xl font-extrabold font-mono text-primary-900 truncate">
+          {{ formatCurrency(totalDisbursedNet) }}
+        </div>
+        <div class="text-xs text-slate-400">Akumulasi pengeluaran bersih gaji.</div>
+      </div>
+
+      <div class="rounded-2xl bg-white p-5 shadow-xs border border-slate-200/80 space-y-2">
+        <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">Status Batch Terbaru</div>
+        <div class="text-xl font-bold text-emerald-700">
+          {{ batches.length > 0 ? batches[0].status : 'Belum Ada' }}
+        </div>
+        <div class="text-xs text-slate-400">Periode: {{ batches.length > 0 ? months.find(m => m.value === batches[0].periodMonth)?.label + ' ' + batches[0].periodYear : '-' }}</div>
+      </div>
+    </div>
+
     <!-- Payroll Batches Table -->
-    <div class="overflow-hidden rounded-2xl bg-white shadow-sm border border-slate-200/80">
+    <div class="overflow-hidden rounded-2xl bg-white shadow-xs border border-slate-200/80">
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm text-slate-600">
-          <thead class="bg-slate-50/80 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+          <thead class="bg-slate-50/90 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
             <tr>
               <th class="px-6 py-4">Periode</th>
               <th class="px-6 py-4">Total Gross</th>
-              <th class="px-6 py-4">Total Net</th>
-              <th class="px-6 py-4">Status</th>
+              <th class="px-6 py-4">Total Net Gaji</th>
+              <th class="px-6 py-4">Status Batch</th>
               <th class="px-6 py-4">Tanggal Dibuat</th>
-              <th class="px-6 py-4 text-right">Actions</th>
+              <th class="px-6 py-4 text-right">Aksi</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             <tr v-if="loading" class="animate-pulse">
-              <td colspan="6" class="px-6 py-8 text-center text-slate-400">
-                Memuat data payroll batches...
+              <td colspan="6" class="px-6 py-12 text-center text-slate-400">
+                <div class="inline-flex items-center gap-2">
+                  <svg class="w-5 h-5 animate-spin text-primary-600" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                  <span>Memuat daftar batch penggajian...</span>
+                </div>
               </td>
             </tr>
             <tr v-else-if="batches.length === 0">
-              <td colspan="6" class="px-6 py-8 text-center text-slate-400">
-                Belum ada batch payroll. Klik "Generate Payroll" untuk membuat batch baru.
+              <td colspan="6" class="px-6 py-12 text-center text-slate-400">
+                Belum ada batch payroll. Klik "Generate Payroll Batch" untuk membuat periode baru.
               </td>
             </tr>
-            <tr v-else v-for="batch in batches" :key="batch.id" class="hover:bg-slate-50/80 transition-colors">
-              <td class="px-6 py-4 font-semibold text-slate-800">
+            <tr v-else v-for="batch in batches" :key="batch.id" class="hover:bg-slate-50/90 transition-colors">
+              <td class="px-6 py-4 font-bold text-slate-900">
                 {{ months.find(m => m.value === batch.periodMonth)?.label }} {{ batch.periodYear }}
               </td>
-              <td class="px-6 py-4 text-emerald-600 font-medium">
+              <td class="px-6 py-4 font-mono font-semibold text-slate-700">
                 {{ formatCurrency(batch.totalGross || 0) }}
               </td>
-              <td class="px-6 py-4 text-indigo-600 font-bold">
+              <td class="px-6 py-4 font-mono font-bold text-primary-900">
                 {{ formatCurrency(batch.totalNet || 0) }}
               </td>
               <td class="px-6 py-4">
                 <span
-                  :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold', getStatusBadgeClass(batch.status)]"
+                  :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold border', getStatusBadgeClass(batch.status)]"
                 >
                   {{ batch.status }}
                 </span>
               </td>
-              <td class="px-6 py-4 text-slate-500 text-xs">
+              <td class="px-6 py-4 text-slate-500 font-mono text-xs">
                 {{ new Date(batch.createdAt).toLocaleDateString('id-ID') }}
               </td>
-              <td class="px-6 py-4 text-right space-x-2">
+              <td class="px-6 py-4 text-right space-x-1">
                 <button
                   @click="viewBatchDetail(batch.id)"
-                  class="rounded-lg px-3 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 transition"
-                  title="View Details"
+                  class="rounded-lg px-3 py-1.5 text-xs font-semibold text-primary-800 hover:bg-primary-50 transition-colors"
+                  title="Lihat Detail Batch"
                 >
-                  View
+                  Detail
                 </button>
                 <button
                   v-if="batch.status === 'DRAFT'"
                   @click="approveBatch(batch.id)"
-                  class="rounded-lg px-3 py-1.5 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition"
-                  title="Approve"
+                  class="rounded-lg px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50 transition-colors"
+                  title="Setujui Batch"
                 >
                   Approve
                 </button>
                 <button
                   v-if="batch.status === 'APPROVED'"
                   @click="markAsPaid(batch.id)"
-                  class="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
-                  title="Mark as Paid"
+                  class="rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors"
+                  title="Tandai Sudah Dibayar"
                 >
                   Mark Paid
                 </button>
@@ -229,20 +272,20 @@ const markAsPaid = async (batchId: string) => {
     <!-- Generate Payroll Modal -->
     <div
       v-if="isGenerateModalOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-fade-in"
     >
       <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 space-y-4">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-          <h3 class="text-lg font-bold text-slate-800">Generate Payroll Batch</h3>
-          <button @click="isGenerateModalOpen = false" class="text-slate-400 hover:text-slate-600">✕</button>
+          <h3 class="text-base font-bold text-slate-900 font-heading">Generate Payroll Batch Baru</h3>
+          <button @click="isGenerateModalOpen = false" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
         </div>
 
         <form @submit.prevent="generatePayroll" class="space-y-4">
           <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">Bulan Periode *</label>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Bulan Periode Gaji *</label>
             <select
               v-model="selectedMonth"
-              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 bg-white"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100 bg-white"
             >
               <option v-for="month in months" :key="month.value" :value="month.value">
                 {{ month.label }}
@@ -251,10 +294,10 @@ const markAsPaid = async (batchId: string) => {
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">Tahun Periode *</label>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Tahun Periode Gaji *</label>
             <select
               v-model="selectedYear"
-              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 bg-white"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100 bg-white"
             >
               <option v-for="year in years" :key="year" :value="year">
                 {{ year }}
@@ -262,24 +305,24 @@ const markAsPaid = async (batchId: string) => {
             </select>
           </div>
 
-          <div class="rounded-xl bg-indigo-50 p-3 text-xs text-indigo-700">
-            <strong>Info:</strong> Proses generate akan menghitung gaji berdasarkan kehadiran, komponen gaji, dan kontrak aktif di periode yang dipilih.
+          <div class="rounded-xl bg-primary-50 p-3 text-xs text-primary-900 border border-primary-200/60">
+            <strong>Catatan System:</strong> Kalkulasi otomatis akan menarik data rekapitulasi presensi, gaji pokok, tunjangan, dan potongan BPJS per karyawan.
           </div>
 
           <div class="flex justify-end gap-3 pt-2">
             <button
               type="button"
               @click="isGenerateModalOpen = false"
-              class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              class="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Batal
             </button>
             <button
               type="submit"
               :disabled="isGenerating"
-              class="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-md hover:bg-indigo-700 disabled:opacity-50"
+              class="rounded-xl bg-primary-900 px-5 py-2 text-xs font-semibold text-white shadow-md hover:bg-primary-800 transition-colors disabled:opacity-50"
             >
-              {{ isGenerating ? 'Generating...' : 'Generate Batch' }}
+              {{ isGenerating ? 'Proses...' : 'Generate Batch' }}
             </button>
           </div>
         </form>

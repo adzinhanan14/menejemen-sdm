@@ -37,6 +37,12 @@ const computedTotalDays = computed(() => {
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 });
 
+const usedPercentage = computed(() => {
+  const total = quota.value.total || 12;
+  const used = quota.value.used || 0;
+  return Math.min(100, Math.round((used / total) * 100));
+});
+
 const fetchTypes = async () => {
   try {
     const res = await leaveApi.getLeaveTypes();
@@ -129,118 +135,144 @@ const handleProcessWorkflow = async (id: string, status: 'APPROVED' | 'REJECTED'
     <!-- Header Title & Action -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-slate-800">Manajemen Izin & Cuti</h1>
-        <p class="text-sm text-slate-500 mt-1">Ajukan permohonan cuti tahunan, sakit, atau izin dan kelola persetujuan tim.</p>
+        <h1 class="text-2xl font-extrabold text-slate-900 font-heading tracking-tight">
+          Manajemen Izin & Cuti
+        </h1>
+        <p class="text-sm text-slate-500 mt-1">
+          Pengajuan cuti tahunan, sakit, atau izin keperluan pribadi dan alur persetujuan beregu.
+        </p>
       </div>
       <button
         @click="openModal"
-        class="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700 active:scale-95"
+        class="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-900 to-primary-800 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-950/20 hover:from-primary-800 hover:to-primary-700 transition-all duration-200 active:scale-95 group"
       >
-        <span class="text-base font-bold">+</span> Ajukan Cuti
+        <svg class="w-4 h-4 text-accent-400 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        <span>Ajukan Cuti Baru</span>
       </button>
     </div>
 
-    <!-- Quota KPI Summary Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
-      <div class="rounded-2xl bg-white p-5 shadow-sm border border-slate-200/80 flex items-center justify-between">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Kuota Cuti</p>
-          <h3 class="text-2xl font-bold text-slate-800 mt-1">{{ quota.total || 12 }} Hari</h3>
+    <!-- Quota Bar & KPI Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="rounded-2xl bg-white p-5 shadow-xs border border-slate-200/80 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Hak Cuti</span>
+          <span class="text-xl">🏖️</span>
         </div>
-        <span class="text-3xl p-3 bg-indigo-50 rounded-2xl text-indigo-600">🏖️</span>
+        <div class="text-3xl font-extrabold font-mono text-slate-900">
+          {{ quota.total || 12 }} <span class="text-sm font-sans text-slate-500 font-normal">Hari / Tahun</span>
+        </div>
+        <div class="text-xs text-slate-400">Kuota standar per periode tahun berjalan.</div>
       </div>
 
-      <div class="rounded-2xl bg-white p-5 shadow-sm border border-slate-200/80 flex items-center justify-between">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Cuti Terpakai</p>
-          <h3 class="text-2xl font-bold text-amber-600 mt-1">{{ quota.used || 0 }} Hari</h3>
+      <div class="rounded-2xl bg-white p-5 shadow-xs border border-slate-200/80 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Cuti Terpakai</span>
+          <span class="text-xl">⌛</span>
         </div>
-        <span class="text-3xl p-3 bg-amber-50 rounded-2xl text-amber-600">⌛</span>
+        <div class="text-3xl font-extrabold font-mono text-amber-600">
+          {{ quota.used || 0 }} <span class="text-sm font-sans text-slate-500 font-normal">Hari</span>
+        </div>
+        <!-- Progress Bar -->
+        <div class="space-y-1">
+          <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+            <div class="bg-amber-500 h-2 rounded-full transition-all duration-500" :style="{ width: `${usedPercentage}%` }"></div>
+          </div>
+          <div class="text-right text-[10px] text-slate-400 font-mono">{{ usedPercentage }}% Terpakai</div>
+        </div>
       </div>
 
-      <div class="rounded-2xl bg-white p-5 shadow-sm border border-slate-200/80 flex items-center justify-between">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Sisa Kuota Cuti</p>
-          <h3 class="text-2xl font-bold text-emerald-600 mt-1">{{ quota.remaining ?? 12 }} Hari</h3>
+      <div class="rounded-2xl bg-white p-5 shadow-xs border border-slate-200/80 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Sisa Kuota Cuti</span>
+          <span class="text-xl">✅</span>
         </div>
-        <span class="text-3xl p-3 bg-emerald-50 rounded-2xl text-emerald-600">✅</span>
+        <div class="text-3xl font-extrabold font-mono text-emerald-600">
+          {{ quota.remaining ?? 12 }} <span class="text-sm font-sans text-slate-500 font-normal">Hari Tersedia</span>
+        </div>
+        <div class="text-xs text-slate-400">Dapat digunakan sampai akhir periode berjalan.</div>
       </div>
     </div>
 
     <!-- Navigation Tabs -->
-    <div class="flex border-b border-slate-200 gap-6 text-sm font-semibold">
+    <div class="flex border-b border-slate-200 gap-8 text-sm font-semibold">
       <button
         @click="activeTab = 'my'"
         :class="[
-          'pb-3 transition border-b-2',
+          'pb-3 transition-colors border-b-2 flex items-center gap-2',
           activeTab === 'my'
-            ? 'border-indigo-600 text-indigo-600'
-            : 'border-transparent text-slate-500 hover:text-slate-700'
+            ? 'border-primary-800 text-primary-800 font-bold'
+            : 'border-transparent text-slate-500 hover:text-slate-800'
         ]"
       >
-        📄 Pengajuan Saya
+        <span>📄 Riwayat Pengajuan Saya</span>
       </button>
       <button
         @click="activeTab = 'approvals'"
         :class="[
-          'pb-3 transition border-b-2 flex items-center gap-2',
+          'pb-3 transition-colors border-b-2 flex items-center gap-2',
           activeTab === 'approvals'
-            ? 'border-indigo-600 text-indigo-600'
-            : 'border-transparent text-slate-500 hover:text-slate-700'
+            ? 'border-primary-800 text-primary-800 font-bold'
+            : 'border-transparent text-slate-500 hover:text-slate-800'
         ]"
       >
-        <span>📑 Persetujuan Cuti</span>
+        <span>📑 Persetujuan Cuti Tim</span>
         <span
           v-if="approvalApplications.length > 0"
-          class="rounded-full bg-rose-500 px-2 py-0.5 text-xs text-white"
+          class="rounded-full bg-rose-500 px-2 py-0.5 text-xs text-white font-mono"
         >
           {{ approvalApplications.length }}
         </span>
       </button>
     </div>
 
-    <!-- TAB 1: My Applications -->
-    <div v-if="activeTab === 'my'" class="overflow-hidden rounded-2xl bg-white shadow-sm border border-slate-200/80">
+    <!-- TAB 1: My Applications Table -->
+    <div v-if="activeTab === 'my'" class="overflow-hidden rounded-2xl bg-white shadow-xs border border-slate-200/80">
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm text-slate-600">
-          <thead class="bg-slate-50/80 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+          <thead class="bg-slate-50/90 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
             <tr>
-              <th class="px-6 py-4">Tipe Cuti</th>
-              <th class="px-6 py-4">Tanggal Mula - Selesai</th>
-              <th class="px-6 py-4">Durasi</th>
-              <th class="px-6 py-4">Alasan</th>
-              <th class="px-6 py-4">Status</th>
+              <th class="px-6 py-4">Jenis Cuti</th>
+              <th class="px-6 py-4">Periode Tanggal</th>
+              <th class="px-6 py-4">Total Durasi</th>
+              <th class="px-6 py-4">Alasan Pengajuan</th>
+              <th class="px-6 py-4">Status Approvals</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             <tr v-if="loading" class="animate-pulse">
-              <td colspan="5" class="px-6 py-8 text-center text-slate-400">Memuat data pengajuan...</td>
+              <td colspan="5" class="px-6 py-12 text-center text-slate-400">
+                Memuat riwayat pengajuan cuti...
+              </td>
             </tr>
             <tr v-else-if="applications.length === 0">
-              <td colspan="5" class="px-6 py-8 text-center text-slate-400">Belum ada permohonan cuti.</td>
+              <td colspan="5" class="px-6 py-12 text-center text-slate-400">
+                Belum ada pengajuan cuti tercatat.
+              </td>
             </tr>
-            <tr v-else v-for="app in applications" :key="app.id" class="hover:bg-slate-50/80 transition-colors">
-              <td class="px-6 py-4 font-semibold text-slate-800">
+            <tr v-else v-for="app in applications" :key="app.id" class="hover:bg-slate-50/90 transition-colors">
+              <td class="px-6 py-4 font-bold text-slate-900">
                 {{ app.leaveType?.name || 'Cuti Tahunan' }}
               </td>
-              <td class="px-6 py-4 text-slate-600">
+              <td class="px-6 py-4 text-xs font-mono text-slate-600">
                 {{ app.startDate }} s/d {{ app.endDate }}
               </td>
-              <td class="px-6 py-4 font-medium text-slate-900">
+              <td class="px-6 py-4 font-mono font-bold text-slate-900">
                 {{ app.totalDays }} Hari
               </td>
-              <td class="px-6 py-4 text-slate-500 max-w-xs truncate">
+              <td class="px-6 py-4 text-slate-500 max-w-xs truncate text-xs">
                 {{ app.reason }}
               </td>
               <td class="px-6 py-4">
                 <span
                   :class="[
-                    'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                    'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold border',
                     app.status === 'APPROVED'
-                      ? 'bg-emerald-100 text-emerald-800'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                       : app.status === 'PENDING'
-                      ? 'bg-amber-100 text-amber-800'
-                      : 'bg-rose-100 text-rose-800'
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-rose-50 text-rose-700 border-rose-200'
                   ]"
                 >
                   {{ app.status }}
@@ -252,48 +284,48 @@ const handleProcessWorkflow = async (id: string, status: 'APPROVED' | 'REJECTED'
       </div>
     </div>
 
-    <!-- TAB 2: Approvals Workflow -->
-    <div v-if="activeTab === 'approvals'" class="overflow-hidden rounded-2xl bg-white shadow-sm border border-slate-200/80">
+    <!-- TAB 2: Approvals Table -->
+    <div v-if="activeTab === 'approvals'" class="overflow-hidden rounded-2xl bg-white shadow-xs border border-slate-200/80">
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm text-slate-600">
-          <thead class="bg-slate-50/80 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+          <thead class="bg-slate-50/90 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
             <tr>
               <th class="px-6 py-4">Pemohon</th>
-              <th class="px-6 py-4">Tipe Cuti</th>
-              <th class="px-6 py-4">Tanggal</th>
+              <th class="px-6 py-4">Jenis Cuti</th>
+              <th class="px-6 py-4">Periode</th>
               <th class="px-6 py-4">Alasan</th>
-              <th class="px-6 py-4 text-right">Keputusan Aksi</th>
+              <th class="px-6 py-4 text-right">Aksi Keputusan</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             <tr v-if="approvalApplications.length === 0">
-              <td colspan="5" class="px-6 py-8 text-center text-slate-400">
-                Tidak ada permohonan cuti yang membutuhkan persetujuan saat ini.
+              <td colspan="5" class="px-6 py-12 text-center text-slate-400">
+                Tidak ada permohonan cuti baru yang memerlukan tindakan persetujuan.
               </td>
             </tr>
-            <tr v-else v-for="app in approvalApplications" :key="app.id" class="hover:bg-slate-50/80 transition-colors">
-              <td class="px-6 py-4 font-semibold text-slate-800">
+            <tr v-else v-for="app in approvalApplications" :key="app.id" class="hover:bg-slate-50/90 transition-colors">
+              <td class="px-6 py-4 font-bold text-slate-900">
                 {{ app.employee?.name || 'Karyawan' }}
               </td>
-              <td class="px-6 py-4 text-indigo-600 font-medium">
+              <td class="px-6 py-4 text-primary-800 font-semibold text-xs">
                 {{ app.leaveType?.name || 'Cuti Tahunan' }}
               </td>
-              <td class="px-6 py-4 text-slate-600">
+              <td class="px-6 py-4 text-xs font-mono text-slate-600">
                 {{ app.startDate }} - {{ app.endDate }} ({{ app.totalDays }} Hari)
               </td>
-              <td class="px-6 py-4 text-slate-500">
+              <td class="px-6 py-4 text-xs text-slate-500 max-w-xs truncate">
                 {{ app.reason }}
               </td>
               <td class="px-6 py-4 text-right space-x-2">
                 <button
                   @click="handleProcessWorkflow(app.id, 'APPROVED')"
-                  class="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
+                  class="rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition-colors"
                 >
                   Setujui
                 </button>
                 <button
                   @click="handleProcessWorkflow(app.id, 'REJECTED')"
-                  class="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-700"
+                  class="rounded-xl bg-rose-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-rose-700 transition-colors"
                 >
                   Tolak
                 </button>
@@ -307,20 +339,20 @@ const handleProcessWorkflow = async (id: string, status: 'APPROVED' | 'REJECTED'
     <!-- Apply Leave Modal -->
     <div
       v-if="isModalOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-fade-in"
     >
       <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 space-y-4">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-          <h3 class="text-lg font-bold text-slate-800">Form Permohonan Cuti</h3>
-          <button @click="isModalOpen = false" class="text-slate-400 hover:text-slate-600">✕</button>
+          <h3 class="text-base font-bold text-slate-900 font-heading">Form Permohonan Cuti Baru</h3>
+          <button @click="isModalOpen = false" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
         </div>
 
         <form @submit.prevent="submitApplication" class="space-y-4">
           <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">Tipe Cuti *</label>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Pilih Tipe Cuti *</label>
             <select
               v-model="form.leaveTypeId"
-              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 bg-white"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100 bg-white"
             >
               <option v-for="t in leaveTypes" :key="t.id" :value="t.id">
                 {{ t.name }} (Kuota: {{ t.quotaPerYear }} Hari/Tahun)
@@ -334,7 +366,7 @@ const handleProcessWorkflow = async (id: string, status: 'APPROVED' | 'REJECTED'
               <input
                 v-model="form.startDate"
                 type="date"
-                class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
               />
             </div>
             <div>
@@ -342,13 +374,14 @@ const handleProcessWorkflow = async (id: string, status: 'APPROVED' | 'REJECTED'
               <input
                 v-model="form.endDate"
                 type="date"
-                class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
               />
             </div>
           </div>
 
-          <div v-if="computedTotalDays > 0" class="rounded-xl bg-indigo-50 p-3 text-xs font-semibold text-indigo-700">
-            Est. Total Durasi Cuti: {{ computedTotalDays }} Hari Kerja
+          <div v-if="computedTotalDays > 0" class="rounded-xl bg-primary-50 p-3 text-xs font-bold text-primary-900 border border-primary-200/60 flex items-center justify-between">
+            <span>Estimasi Durasi Cuti:</span>
+            <span class="font-mono text-sm font-extrabold">{{ computedTotalDays }} Hari Kerja</span>
           </div>
 
           <div>
@@ -356,8 +389,8 @@ const handleProcessWorkflow = async (id: string, status: 'APPROVED' | 'REJECTED'
             <textarea
               v-model="form.reason"
               rows="3"
-              placeholder="Berikan penjelasan keperluan cuti Anda..."
-              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              placeholder="Jelaskan alasan atau kebutuhan cuti Anda..."
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
             ></textarea>
           </div>
 
@@ -365,14 +398,14 @@ const handleProcessWorkflow = async (id: string, status: 'APPROVED' | 'REJECTED'
             <button
               type="button"
               @click="isModalOpen = false"
-              class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              class="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Batal
             </button>
             <button
               type="submit"
               :disabled="isSubmitting"
-              class="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-md hover:bg-indigo-700 disabled:opacity-50"
+              class="rounded-xl bg-primary-900 px-5 py-2 text-xs font-semibold text-white shadow-md hover:bg-primary-800 transition-colors disabled:opacity-50"
             >
               {{ isSubmitting ? 'Mengirim...' : 'Kirim Pengajuan' }}
             </button>

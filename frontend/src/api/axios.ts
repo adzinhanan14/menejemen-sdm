@@ -3,7 +3,7 @@ import { useAuthStore } from '@/store/auth';
 import router from '@/router';
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001/api/v1',
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? 'https://menejemen-sdm.onrender.com/api/v1',
   timeout: 15000,
 });
 

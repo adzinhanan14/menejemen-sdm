@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { dashboardApi } from '@/api/dashboard';
-import OrgChart3D from '@/components/3d/OrgChart3D.vue';
+import DepartmentAnalytics from '@/components/dashboard/DepartmentAnalytics.vue';
 import { useAuthStore } from '@/store/auth';
 
 const authStore = useAuthStore();
@@ -258,9 +258,9 @@ function getActivityMeta(action: string) {
     <!-- Main Content Grid: Golden Ratio 2:1 -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
-      <!-- Org Chart (2 columns = 61.8% of space) -->
+      <!-- Department & HR Analytics Widget (2 columns = 61.8% of space) -->
       <div class="lg:col-span-2">
-        <OrgChart3D />
+        <DepartmentAnalytics />
       </div>
 
       <!-- Recent Activities (1 column = 38.2%) -->
